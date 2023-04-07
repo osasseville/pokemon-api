@@ -53,6 +53,7 @@ pub struct PokemonTableRow {
     pub fairy_attack_effectiveness: f32,
 }
 
+#[derive(Clone, Copy)]
 pub struct PokemonId(Ksuid);
 
 impl PokemonId {

@@ -25,7 +25,7 @@ where
     Ok(values)
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 pub struct PokemonCsv {
     pub name: String,
     pub pokedex_id: u16,

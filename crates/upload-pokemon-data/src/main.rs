@@ -8,7 +8,7 @@ mod db;
 use db::*;
 use indicatif::ProgressIterator;
 use sqlx::{mysql::MySqlPoolOptions, MySqlPool};
-use std::env;
+use std::{collections::HashMap, env};
 
 #[tokio::main]
 async fn main() -> eyre::Result<()> {
@@ -29,9 +29,75 @@ async fn main() -> eyre::Result<()> {
         .deserialize()
         .collect::<Result<Vec<PokemonCsv>, csv::Error>>()?;
 
-    for record in pokemon.into_iter().progress() {
-        let pokemon_row: PokemonTableRow = record.into();
+    let mut pokemon_map: HashMap<String, PokemonId> = HashMap::new();
+
+    for record in pokemon.iter().progress() {
+        let pokemon_row: PokemonTableRow = record.clone().into();
+        pokemon_map.insert(pokemon_row.name.clone(), pokemon_row.id);
         insert_pokemon(&pool, &pokemon_row).await?;
+
+        for ability in record.abilities.iter() {
+            sqlx::query!(
+                r#"
+                insert into abilities (
+                    id, pokemon_id, ability
+                ) values (?, ?, ?)
+            "#,
+                PokemonId::new(),
+                pokemon_row.id,
+                ability
+            )
+            .execute(&pool)
+            .await?;
+        }
+
+        for typing in record.typing.iter() {
+            sqlx::query!(
+                r#"
+                insert into typing (
+                    id, pokemon_id, typing
+                ) values (?, ?, ?)
+            "#,
+                PokemonId::new(),
+                pokemon_row.id,
+                typing
+            )
+            .execute(&pool)
+            .await?;
+        }
+
+        for egg_group in record.egg_groups.iter() {
+            sqlx::query!(
+                r#"
+                insert into egg_groups (
+                    id, pokemon_id, egg_group
+                ) values (?, ?, ?)
+            "#,
+                PokemonId::new(),
+                pokemon_row.id,
+                egg_group
+            )
+            .execute(&pool)
+            .await?;
+        }
+    }
+
+
+    for record in pokemon
+        .iter()
+        .progress()
+        .filter(|pokemon| pokemon.evolves_from.is_some())
+    {
+        let name = record.evolves_from.as_ref().unwrap();
+        let pokemon_id = pokemon_map.get(&record.name);
+        let evoles_from_id = pokemon_map.get(name);
+        
+        sqlx::query!(r#"
+            insert into evolutions (
+                id, pokemon_id, evolves_from
+            ) values (?, ?, ?)
+        "#, PokemonId::new(), pokemon_id, evoles_from_id
+        ).execute(&pool).await?;
     }
 
     Ok(())
