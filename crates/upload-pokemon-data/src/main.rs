@@ -6,6 +6,7 @@ use color_eyre::{
 use pokemon_csv::*;
 mod db;
 use db::*;
+use indicatif::ProgressIterator;
 use sqlx::{mysql::MySqlPoolOptions, MySqlPool};
 use std::env;
 
@@ -24,14 +25,12 @@ async fn main() -> eyre::Result<()> {
         )?;
     let path = "./crates/upload-pokemon-data/pokemon.csv";
     let mut rdr = csv::Reader::from_path(path)?;
+    let pokemon = rdr
+        .deserialize()
+        .collect::<Result<Vec<PokemonCsv>, csv::Error>>()?;
 
-    for result in rdr.deserialize() {
-        let record: PokemonCsv = result?;
+    for record in pokemon.into_iter().progress() {
         let pokemon_row: PokemonTableRow = record.into();
-        println!(
-            "{}, {:?} {}",
-            pokemon_row.pokedex_id, pokemon_row.id, pokemon_row.name
-        );
         insert_pokemon(&pool, &pokemon_row).await?;
     }
 
