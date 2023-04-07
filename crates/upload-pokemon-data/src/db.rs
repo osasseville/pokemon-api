@@ -1,7 +1,8 @@
 use crate::pokemon_csv::PokemonCsv;
-use ksuid::Ksuid;
-use std::fmt;
 use inflector::Inflector;
+use ksuid::Ksuid;
+use sqlx::{Encode, MySql, Type};
+use std::fmt;
 
 #[derive(Debug)]
 pub struct PokemonTableRow {
@@ -21,8 +22,8 @@ pub struct PokemonTableRow {
     pub weight: u16,
     pub generation: u16,
     pub female_rate: Option<f32>,
-    // pub genderless: bool,
-    pub is_legendary_or_mythical: bool,
+    pub genderless: bool,
+    pub legendary_or_mythical: bool,
     pub is_default: bool,
     pub forms_switchable: bool,
     pub base_experience: u16,
@@ -68,6 +69,26 @@ impl fmt::Debug for PokemonId {
     }
 }
 
+impl<'q> Encode<'q, MySql> for PokemonId {
+    fn encode_by_ref(
+        &self,
+        buf: &mut <MySql as sqlx::database::HasArguments<'q>>::ArgumentBuffer,
+    ) -> sqlx::encode::IsNull {
+        let bytes: &[u8] = &self.0.to_base62().into_bytes();
+        <&[u8] as Encode<MySql>>::encode(bytes, buf)
+    }
+}
+
+impl Type<MySql> for PokemonId {
+    fn type_info() -> <MySql as sqlx::Database>::TypeInfo {
+        <&[u8] as Type<MySql>>::type_info()
+    }
+
+    fn compatible(ty: &<MySql as sqlx::Database>::TypeInfo) -> bool {
+        <&[u8] as Type<MySql>>::compatible(ty)
+    }
+}
+
 impl From<PokemonCsv> for PokemonTableRow {
     fn from(x: PokemonCsv) -> Self {
         PokemonTableRow {
@@ -85,7 +106,8 @@ impl From<PokemonCsv> for PokemonTableRow {
             weight: x.weight,
             generation: x.generation.into(),
             female_rate: x.female_rate,
-            is_legendary_or_mythical: x.is_legendary_or_mythical,
+            genderless: x.genderless,
+            legendary_or_mythical: x.legendary_or_mythical,
             is_default: x.is_default,
             forms_switchable: x.forms_switchable,
             base_experience: x.base_experience,

@@ -49,7 +49,7 @@ pub struct PokemonCsv {
         rename(deserialize = "legendary/mythical"),
         deserialize_with = "from_capital_bool"
     )]
-    pub is_legendary_or_mythical: bool,
+    pub legendary_or_mythical: bool,
     #[serde(deserialize_with = "from_capital_bool")]
     pub is_default: bool,
     #[serde(deserialize_with = "from_capital_bool")]
