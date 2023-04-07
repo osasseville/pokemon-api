@@ -4,7 +4,7 @@ use ksuid::Ksuid;
 use sqlx::{Encode, MySql, Type};
 use std::fmt;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct PokemonTableRow {
     pub id: PokemonId,
     pub slug: String,

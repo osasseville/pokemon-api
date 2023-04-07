@@ -3,12 +3,13 @@ use color_eyre::{
     eyre::{self, Context},
     Help,
 };
+use futures::{stream::FuturesUnordered, StreamExt};
 use pokemon_csv::*;
 mod db;
 use db::*;
-use indicatif::ProgressIterator;
+use indicatif::{ProgressBar, ProgressIterator};
 use sqlx::{mysql::MySqlPoolOptions, MySqlPool};
-use std::{collections::HashMap, env};
+use std::{collections::HashMap, env, time::Duration};
 
 #[tokio::main]
 async fn main() -> eyre::Result<()> {
@@ -17,7 +18,8 @@ async fn main() -> eyre::Result<()> {
         .wrap_err("Must have a DATABASE_URL set")
         .suggestion("Un `pscale connect <database> <branch>` to get an connection")?;
     let pool = MySqlPoolOptions::new()
-        .max_connections(5)
+        .max_connections(50)
+        .idle_timeout(Duration::from_secs(60 & 5))
         .connect(&database_url)
         .await
         .suggestion(
@@ -30,82 +32,100 @@ async fn main() -> eyre::Result<()> {
         .collect::<Result<Vec<PokemonCsv>, csv::Error>>()?;
 
     let mut pokemon_map: HashMap<String, PokemonId> = HashMap::new();
+    let mut tasks = FuturesUnordered::new();
 
-    for record in pokemon.iter().progress() {
+    for record in pokemon.clone().into_iter().progress() {
         let pokemon_row: PokemonTableRow = record.clone().into();
         pokemon_map.insert(pokemon_row.name.clone(), pokemon_row.id);
-        insert_pokemon(&pool, &pokemon_row).await?;
+        tasks.push(tokio::spawn(insert_pokemon(
+            pool.clone(),
+            pokemon_row.clone(),
+        )));
 
         for ability in record.abilities.iter() {
-            sqlx::query!(
-                r#"
-                insert into abilities (
-                    id, pokemon_id, ability
-                ) values (?, ?, ?)
-            "#,
-                PokemonId::new(),
-                pokemon_row.id,
-                ability
-            )
-            .execute(&pool)
-            .await?;
+            let pool = pool.clone();
+            let pokemon_id = pokemon_row.id.clone();
+            let ability = ability.clone();
+            tasks.push(tokio::spawn(async move {
+                sqlx::query!(
+                    r#" insert into abilities ( id, pokemon_id, ability) values (?, ?, ?) "#,
+                    PokemonId::new(),
+                    pokemon_id,
+                    ability
+                )
+                .execute(&pool)
+                .await
+            }));
         }
 
         for typing in record.typing.iter() {
-            sqlx::query!(
-                r#"
-                insert into typing (
-                    id, pokemon_id, typing
-                ) values (?, ?, ?)
-            "#,
-                PokemonId::new(),
-                pokemon_row.id,
-                typing
-            )
-            .execute(&pool)
-            .await?;
+            let pool = pool.clone();
+            let pokemon_id = pokemon_row.id.clone();
+            let typing = typing.clone();
+            tasks.push(tokio::spawn(async move {
+                sqlx::query!(
+                    r#" insert into typing ( id, pokemon_id, typing) values (?, ?, ?) "#,
+                    PokemonId::new(),
+                    pokemon_id,
+                    typing
+                )
+                .execute(&pool)
+                .await
+            }));
         }
 
         for egg_group in record.egg_groups.iter() {
-            sqlx::query!(
-                r#"
-                insert into egg_groups (
-                    id, pokemon_id, egg_group
-                ) values (?, ?, ?)
-            "#,
-                PokemonId::new(),
-                pokemon_row.id,
-                egg_group
-            )
-            .execute(&pool)
-            .await?;
+            let pool = pool.clone();
+            let pokemon_id = pokemon_row.id.clone();
+            let egg_group = egg_group.clone();
+            tasks.push(tokio::spawn(async move {
+                sqlx::query!(
+                    r#" insert into egg_groups ( id, pokemon_id, egg_group) values (?, ?, ?) "#,
+                    PokemonId::new(),
+                    pokemon_id,
+                    egg_group
+                )
+                .execute(&pool)
+                .await
+            }));
         }
     }
-
 
     for record in pokemon
         .iter()
         .progress()
         .filter(|pokemon| pokemon.evolves_from.is_some())
     {
+        let pool = pool.clone();
         let name = record.evolves_from.as_ref().unwrap();
-        let pokemon_id = pokemon_map.get(&record.name);
-        let evoles_from_id = pokemon_map.get(name);
-        
-        sqlx::query!(r#"
-            insert into evolutions (
-                id, pokemon_id, evolves_from
-            ) values (?, ?, ?)
-        "#, PokemonId::new(), pokemon_id, evoles_from_id
-        ).execute(&pool).await?;
+        let pokemon_id = pokemon_map.get(&record.name).unwrap().clone();
+        let evoles_from_id = pokemon_map.get(name).unwrap().clone();
+
+        tasks.push(tokio::spawn(async move {
+            sqlx::query!(
+                r#" insert into evolutions ( id, pokemon_id, evolves_from) values (?, ?, ?) "#,
+                PokemonId::new(),
+                pokemon_id,
+                evoles_from_id
+            )
+            .execute(&pool)
+            .await
+        }));
     }
+
+    let pb = ProgressBar::new(tasks.len() as u64);
+    while let Some(item) = tasks.next().await {
+        item??;
+        pb.inc(1);
+    }
+    pb.finish();
 
     Ok(())
 }
 
 pub async fn insert_pokemon(
-    pool: &MySqlPool,
-    x: &PokemonTableRow,
+    pool: MySqlPool,
+    x: PokemonTableRow,
 ) -> Result<sqlx::mysql::MySqlQueryResult, sqlx::Error> {
     sqlx::query!(
         r#"
@@ -194,6 +214,6 @@ pub async fn insert_pokemon(
         x.steel_attack_effectiveness,
         x.fairy_attack_effectiveness,
     )
-    .execute(pool)
+    .execute(&pool)
     .await
 }
