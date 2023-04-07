@@ -1,9 +1,12 @@
-use std::fmt;
+use crate::pokemon_csv::PokemonCsv;
 use ksuid::Ksuid;
+use std::fmt;
+use inflector::Inflector;
 
 #[derive(Debug)]
 pub struct PokemonTableRow {
     pub id: PokemonId,
+    pub slug: String,
     pub name: String,
     pub pokedex_id: u16,
     // pub abilities: Vec<String>,
@@ -62,5 +65,53 @@ impl fmt::Debug for PokemonId {
         f.debug_tuple("PokemonId")
             .field(&self.0.to_base62())
             .finish()
+    }
+}
+
+impl From<PokemonCsv> for PokemonTableRow {
+    fn from(x: PokemonCsv) -> Self {
+        PokemonTableRow {
+            id: PokemonId::new(),
+            slug: x.name.to_kebab_case(),
+            name: x.name,
+            pokedex_id: x.pokedex_id,
+            hp: x.hp.into(),
+            attack: x.attack.into(),
+            defense: x.defense.into(),
+            special_attack: x.special_attack.into(),
+            special_defense: x.special_defense.into(),
+            speed: x.speed.into(),
+            height: x.height,
+            weight: x.weight,
+            generation: x.generation.into(),
+            female_rate: x.female_rate,
+            is_legendary_or_mythical: x.is_legendary_or_mythical,
+            is_default: x.is_default,
+            forms_switchable: x.forms_switchable,
+            base_experience: x.base_experience,
+            capture_rate: x.capture_rate.into(),
+            base_happiness: x.base_happiness.into(),
+            evolves_from: x.evolves_from,
+            primary_color: x.primary_color,
+            number_pokemon_with_typing: x.number_pokemon_with_typing,
+            normal_attack_effectiveness: x.normal_attack_effectiveness,
+            fire_attack_effectiveness: x.fire_attack_effectiveness,
+            water_attack_effectiveness: x.water_attack_effectiveness,
+            electric_attack_effectiveness: x.electric_attack_effectiveness,
+            grass_attack_effectiveness: x.grass_attack_effectiveness,
+            ice_attack_effectiveness: x.ice_attack_effectiveness,
+            fighting_attack_effectiveness: x.fighting_attack_effectiveness,
+            poison_attack_effectiveness: x.poison_attack_effectiveness,
+            ground_attack_effectiveness: x.ground_attack_effectiveness,
+            fly_attack_effectiveness: x.fly_attack_effectiveness,
+            psychic_attack_effectiveness: x.psychic_attack_effectiveness,
+            bug_attack_effectiveness: x.bug_attack_effectiveness,
+            rock_attack_effectiveness: x.rock_attack_effectiveness,
+            ghost_attack_effectiveness: x.ghost_attack_effectiveness,
+            dragon_attack_effectiveness: x.dragon_attack_effectiveness,
+            dark_attack_effectiveness: x.dark_attack_effectiveness,
+            steel_attack_effectiveness: x.steel_attack_effectiveness,
+            fairy_attack_effectiveness: x.fairy_attack_effectiveness,
+        }
     }
 }
