@@ -1,10 +1,19 @@
 mod pokemon_csv;
+use color_eyre::{
+    eyre::{self, Context},
+    Help,
+};
 use pokemon_csv::*;
 mod db;
 use db::*;
 use sqlx::MySqlPool;
+use std::env;
 
-fn main() -> Result<(), csv::Error> {
+fn main() -> eyre::Result<()> {
+    color_eyre::install()?;
+    let database_url = env::var("DATABASE_URL")
+        .wrap_err("Must have a DATABASE_URL set")
+        .suggestion("Un `pscale connect <database> <branch>` to get an connection");
     let path = "./crates/upload-pokemon-data/pokemon.csv";
     let mut rdr = csv::Reader::from_path(path)?;
 
@@ -14,8 +23,6 @@ fn main() -> Result<(), csv::Error> {
         println!("{:?}", pokemon_row);
     }
 
-    dbg!(PokemonId::new());
-
     Ok(())
 }
 
@@ -23,7 +30,8 @@ pub async fn insert_pokemon(
     pool: &MySqlPool,
     x: &PokemonTableRow,
 ) -> Result<sqlx::mysql::MySqlQueryResult, sqlx::Error> {
-    sqlx::query!(r#"
+    sqlx::query!(
+        r#"
     insert into pokemon (
         id,
         slug,
