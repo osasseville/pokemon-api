@@ -4,10 +4,7 @@ directory = "functions/"
 [build]
 command = """
 mkdir -p functions &&
-set -euxo pipefail &&
-npm i -g @ziglang/cli &&
-cargo install cargo-zigbuild &&
-cargo zigbuild --release --bin pokemon-api --target x86_64-unknown-linux-gnu.2.26 &&
-cp target/x86_64-unknown-linux-gnu/release/pokemon-api functions/
+cargo build --release --bin pokemon-api -p pokemon-api &&
+cp target/release/pokemon-api functions/
 """
 publish = "crates"

@@ -6,18 +6,18 @@ use aws_lambda_events::{
     }
 };
 use http::header::HeaderMap;
-use lambda_runtime::{service_fn, Context, Error};
+use lambda_runtime::{service_fn, Error, LambdaEvent};
 
-fn main() -> Result<(), Error> {
+#[tokio::main]
+async fn main() -> Result<(), Error> {
     println!("cold start");
-    let processor = service_fn(handler);
-    lambda_runtime::service_fn(processor);
+    let service = service_fn(handler);
+    lambda_runtime::run(service).await?;
     Ok(())
 }
 
 async fn handler(
-    _: ApiGatewayProxyRequest,
-    _: Context,
+    _: LambdaEvent<ApiGatewayProxyRequest>
 ) -> Result<ApiGatewayProxyResponse, Error> {
     println!("handler");
     let response = ApiGatewayProxyResponse {
